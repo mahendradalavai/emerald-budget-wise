@@ -72,7 +72,7 @@ function Auth() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const p = authSchema.safeParse({ email, password });
-    if (!p.success) return toast.error(p.error.issues[0].message);
+    if (!p.success) { toast.error(p.error.issues[0]?.message); return; }
     setBusy(true);
     if (mode === "in") {
       const { error } = await supabase.auth.signInWithPassword(p.data);
@@ -260,9 +260,9 @@ function AddExpense({ open, onOpenChange, onSaved }: { open: boolean; onOpenChan
   const [date, setDate] = useState(today());
   const save = async () => {
     const p = expenseSchema.safeParse({ amount: Number(amount), category, note, spent_on: date });
-    if (!p.success) return toast.error(p.error.issues[0].message);
+    if (!p.success) { toast.error(p.error.issues[0]?.message); return; }
     const { error } = await supabase.from("expenses").insert({ ...p.data, note: p.data.note || null });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("Expense added");
     setAmount(""); setNote(""); onOpenChange(false); onSaved();
   };
@@ -293,10 +293,10 @@ function BudgetDrawer({ open, onOpenChange, month, current, onSaved }: { open: b
   useEffect(() => { if (open) setVal(current ? String(current) : ""); }, [open, current]);
   const save = async () => {
     const n = Number(val);
-    if (!(n >= 0) || n > 100000000) return toast.error("Enter a valid amount");
+    if (!(n >= 0) || n > 100000000) { toast.error("Enter a valid amount"); return; }
     const { data: u } = await supabase.auth.getUser();
     const { error } = await supabase.from("budgets").upsert({ month, amount: n, user_id: u.user!.id }, { onConflict: "user_id,month" });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("Budget saved"); onOpenChange(false); onSaved();
   };
   return (

@@ -4,8 +4,7 @@ import type { Session } from "@supabase/supabase-js";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
-  Home, ShoppingCart, Soup, Bus, GlassWater, MoreHorizontal, Plus, LogOut, Wallet,
-  ChevronLeft, ChevronRight, Trash2, CalendarDays, BarChart3, List,
+  Plus, LogOut, Wallet, ChevronLeft, ChevronRight, Trash2, CalendarDays, BarChart3, List, Pencil,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -21,20 +20,25 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "Track your monthly budget and daily spending on rent, groceries, curries, travel, drinks and more." },
       { property: "og:title", content: "Kharcha – Expense Tracker" },
       { property: "og:description", content: "Simple green mobile expense tracker for daily, monthly and yearly spending." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Index,
 });
 
-const CATEGORIES = [
-  { key: "rent", label: "Room Rent", icon: Home },
-  { key: "groceries", label: "Groceries", icon: ShoppingCart },
-  { key: "curries", label: "Curries", icon: Soup },
-  { key: "travel", label: "Travel", icon: Bus },
-  { key: "drinks", label: "Drinks", icon: GlassWater },
-  { key: "other", label: "Other", icon: MoreHorizontal },
-] as const;
-const catOf = (k: string) => CATEGORIES.find((c) => c.key === k) ?? CATEGORIES[5];
+type Cat = { key: string; label: string; emoji: string; custom?: boolean };
+
+const DEFAULT_CATEGORIES: Cat[] = [
+  { key: "rent", label: "Room Rent", emoji: "🏠" },
+  { key: "groceries", label: "Groceries", emoji: "🛒" },
+  { key: "curries", label: "Curries", emoji: "🍛" },
+  { key: "travel", label: "Travel", emoji: "🚌" },
+  { key: "drinks", label: "Drinks", emoji: "🥤" },
+  { key: "other", label: "Other", emoji: "💸" },
+];
+const EMOJI_CHOICES = ["🏠","🛒","🍛","🚌","🥤","💸","🍔","🍕","☕","🎬","👕","💊","📱","⚡","🎁","🐾","📚","🏋️","✈️","🎮","💇","🧾","🛕","🎵"];
+
 const money = (n: number) => "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
 const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -109,40 +113,59 @@ function Tracker({ email }: { email: string }) {
   const [tab, setTab] = useState<"month" | "daily" | "year">("month");
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [yearExp, setYearExp] = useState<Expense[]>([]);
+  const [customCats, setCustomCats] = useState<Cat[]>([]);
   const [budget, setBudget] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
   const [budgetOpen, setBudgetOpen] = useState(false);
+  const [catOpen, setCatOpen] = useState(false);
+  const [editCat, setEditCat] = useState<Cat | null>(null);
+  const [calDay, setCalDay] = useState<string | null>(null);
   const key = ym(month);
   const year = month.getFullYear();
+
+  const cats = useMemo(() => [...DEFAULT_CATEGORIES, ...customCats], [customCats]);
+  const catOf = (k: string) => cats.find((c) => c.key === k) ?? { key: k, label: k, emoji: "💸" };
 
   const load = async () => {
     const start = `${key}-01`;
     const end = ym(new Date(month.getFullYear(), month.getMonth() + 1, 1)) + "-01";
-    const [e, b, y] = await Promise.all([
+    const [e, b, y, c] = await Promise.all([
       supabase.from("expenses").select("*").gte("spent_on", start).lt("spent_on", end).order("spent_on", { ascending: false }),
       supabase.from("budgets").select("amount").eq("month", key).maybeSingle(),
       supabase.from("expenses").select("*").gte("spent_on", `${year}-01-01`).lt("spent_on", `${year + 1}-01-01`),
+      supabase.from("categories").select("*").order("created_at"),
     ]);
     setExpenses((e.data ?? []).map((x) => ({ ...x, amount: Number(x.amount) })));
     setBudget(Number(b.data?.amount ?? 0));
     setYearExp((y.data ?? []).map((x) => ({ ...x, amount: Number(x.amount) })));
+    setCustomCats((c.data ?? []).map((x) => ({ key: x.id, label: x.label, emoji: x.emoji, custom: true })));
   };
   useEffect(() => { load(); }, [key]);
 
   const spent = expenses.reduce((s, x) => s + x.amount, 0);
   const left = budget - spent;
-  const byCat = useMemo(() => CATEGORIES.map((c) => ({ ...c, total: expenses.filter((x) => x.category === c.key).reduce((s, x) => s + x.amount, 0) })), [expenses]);
+  const byCat = useMemo(() => cats.map((c) => ({ ...c, total: expenses.filter((x) => x.category === c.key).reduce((s, x) => s + x.amount, 0) })), [expenses, cats]);
   const byDay = useMemo(() => {
     const m = new Map<string, Expense[]>();
     expenses.forEach((x) => m.set(x.spent_on, [...(m.get(x.spent_on) ?? []), x]));
     return [...m.entries()];
   }, [expenses]);
+  const dayTotals = useMemo(() => new Map(byDay.map(([d, items]) => [d, items.reduce((s, x) => s + x.amount, 0)])), [byDay]);
+  const maxDay = Math.max(1, ...dayTotals.values());
   const byMonth = useMemo(() => Array.from({ length: 12 }, (_, i) => {
     const k = `${year}-${String(i + 1).padStart(2, "0")}`;
     return { label: new Date(year, i).toLocaleString("en", { month: "short" }), total: yearExp.filter((x) => x.spent_on.startsWith(k)).reduce((s, x) => s + x.amount, 0) };
   }), [yearExp, year]);
   const yearTotal = byMonth.reduce((s, m) => s + m.total, 0);
   const maxMonth = Math.max(1, ...byMonth.map((m) => m.total));
+
+  // calendar grid
+  const daysInMonth = new Date(year, month.getMonth() + 1, 0).getDate();
+  const firstWeekday = new Date(year, month.getMonth(), 1).getDay();
+  const calCells: (string | null)[] = [
+    ...Array<null>(firstWeekday).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => `${key}-${String(i + 1).padStart(2, "0")}`),
+  ];
 
   const del = async (id: string) => {
     const { error } = await supabase.from("expenses").delete().eq("id", id);
@@ -175,14 +198,24 @@ function Tracker({ email }: { email: string }) {
       <main className="px-5 pt-5">
         {tab === "month" && (
           <section className="space-y-3">
-            <h3 className="font-bold">Spending by category</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold">Spending by category</h3>
+              <button onClick={() => { setEditCat(null); setCatOpen(true); }} className="flex items-center gap-1 text-sm font-semibold text-primary">
+                <Plus className="h-4 w-4" /> New
+              </button>
+            </div>
             {byCat.map((c) => (
               <div key={c.key} className="flex items-center gap-3 rounded-2xl bg-card p-3 shadow-sm ring-1 ring-border">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-primary"><c.icon className="h-5 w-5" /></div>
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-2xl">{c.emoji}</div>
                 <div className="flex-1">
                   <div className="flex justify-between text-sm font-semibold"><span>{c.label}</span><span>{money(c.total)}</span></div>
                   <Progress value={spent ? (c.total / spent) * 100 : 0} className="mt-2 h-1.5 bg-secondary" />
                 </div>
+                {c.custom && (
+                  <button aria-label={`Edit ${c.label}`} onClick={() => { setEditCat(c); setCatOpen(true); }} className="p-1 text-muted-foreground hover:text-primary">
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             ))}
           </section>
@@ -190,8 +223,31 @@ function Tracker({ email }: { email: string }) {
 
         {tab === "daily" && (
           <section className="space-y-4">
-            {byDay.length === 0 && <p className="py-10 text-center text-muted-foreground">No expenses this month yet. Tap + to add one.</p>}
-            {byDay.map(([day, items]) => (
+            <div className="rounded-2xl bg-card p-3 shadow-sm ring-1 ring-border">
+              <div className="mb-2 grid grid-cols-7 text-center text-[10px] font-bold text-muted-foreground">
+                {["S","M","T","W","T","F","S"].map((d, i) => <span key={i}>{d}</span>)}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {calCells.map((d, i) => {
+                  if (!d) return <span key={i} />;
+                  const t = dayTotals.get(d) ?? 0;
+                  const isToday = d === today();
+                  return (
+                    <button key={d} onClick={() => setCalDay(calDay === d ? null : d)}
+                      className={`flex flex-col items-center rounded-lg py-1.5 text-xs font-semibold ${calDay === d ? "bg-primary text-primary-foreground" : isToday ? "ring-1 ring-primary" : ""}`}>
+                      <span>{Number(d.slice(8))}</span>
+                      <span className={`mt-0.5 h-1.5 w-1.5 rounded-full ${t ? "bg-primary" : "bg-transparent"}`}
+                        style={t && calDay !== d ? { opacity: 0.35 + 0.65 * (t / maxDay), transform: `scale(${0.8 + 0.9 * (t / maxDay)})` } : undefined} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {(calDay ? byDay.filter(([d]) => d === calDay) : byDay).length === 0 && (
+              <p className="py-6 text-center text-muted-foreground">{calDay ? "No expenses on this day." : "No expenses this month yet. Tap + to add one."}</p>
+            )}
+            {(calDay ? byDay.filter(([d]) => d === calDay) : byDay).map(([day, items]) => (
               <div key={day}>
                 <div className="mb-2 flex justify-between text-sm font-bold">
                   <span>{new Date(day + "T00:00").toLocaleDateString("en", { weekday: "short", day: "numeric", month: "short" })}</span>
@@ -200,7 +256,7 @@ function Tracker({ email }: { email: string }) {
                 <div className="divide-y divide-border rounded-2xl bg-card shadow-sm ring-1 ring-border">
                   {items.map((x) => { const c = catOf(x.category); return (
                     <div key={x.id} className="flex items-center gap-3 p-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary text-primary"><c.icon className="h-5 w-5" /></div>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary text-xl">{c.emoji}</div>
                       <div className="flex-1 min-w-0"><p className="font-semibold">{c.label}</p>{x.note && <p className="truncate text-xs text-muted-foreground">{x.note}</p>}</div>
                       <p className="font-bold">{money(x.amount)}</p>
                       <button aria-label="Delete" onClick={() => del(x.id)} className="p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
@@ -240,8 +296,9 @@ function Tracker({ email }: { email: string }) {
         ))}
       </nav>
 
-      <AddExpense open={addOpen} onOpenChange={setAddOpen} onSaved={load} />
+      <AddExpense open={addOpen} onOpenChange={setAddOpen} onSaved={load} cats={cats} />
       <BudgetDrawer open={budgetOpen} onOpenChange={setBudgetOpen} month={key} current={budget} onSaved={load} />
+      <CategoryDrawer open={catOpen} onOpenChange={setCatOpen} edit={editCat} onSaved={load} />
     </div>
   );
 }
@@ -253,7 +310,7 @@ const expenseSchema = z.object({
   spent_on: z.string().min(10, "Pick a date"),
 });
 
-function AddExpense({ open, onOpenChange, onSaved }: { open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void }) {
+function AddExpense({ open, onOpenChange, onSaved, cats }: { open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void; cats: Cat[] }) {
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("groceries");
   const [note, setNote] = useState("");
@@ -270,12 +327,12 @@ function AddExpense({ open, onOpenChange, onSaved }: { open: boolean; onOpenChan
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="mx-auto max-w-md">
         <DrawerHeader><DrawerTitle>Add expense</DrawerTitle></DrawerHeader>
-        <div className="space-y-4 px-5 pb-8">
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 pb-8">
           <Input inputMode="decimal" placeholder="₹ 0" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-14 rounded-xl text-2xl font-bold" />
           <div className="grid grid-cols-3 gap-2">
-            {CATEGORIES.map((c) => (
+            {cats.map((c) => (
               <button key={c.key} onClick={() => setCategory(c.key)} className={`flex flex-col items-center gap-1 rounded-xl border p-3 text-xs font-semibold ${category === c.key ? "border-primary bg-secondary text-primary" : "border-border"}`}>
-                <c.icon className="h-5 w-5" />{c.label}
+                <span className="text-2xl">{c.emoji}</span>{c.label}
               </button>
             ))}
           </div>
@@ -306,6 +363,48 @@ function BudgetDrawer({ open, onOpenChange, month, current, onSaved }: { open: b
         <div className="space-y-4 px-5 pb-8">
           <Input inputMode="decimal" placeholder="₹ 0" value={val} onChange={(e) => setVal(e.target.value)} className="h-14 rounded-xl text-2xl font-bold" />
           <Button onClick={save} className="h-12 w-full rounded-xl text-base font-bold">Save budget</Button>
+        </div>
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
+function CategoryDrawer({ open, onOpenChange, edit, onSaved }: { open: boolean; onOpenChange: (o: boolean) => void; edit: Cat | null; onSaved: () => void }) {
+  const [label, setLabel] = useState("");
+  const [emoji, setEmoji] = useState("💸");
+  useEffect(() => { if (open) { setLabel(edit?.label ?? ""); setEmoji(edit?.emoji ?? "💸"); } }, [open, edit]);
+  const save = async () => {
+    const l = label.trim();
+    if (!l || l.length > 30) { toast.error("Enter a category name"); return; }
+    if (edit) {
+      const { error } = await supabase.from("categories").update({ label: l, emoji }).eq("id", edit.key);
+      if (error) { toast.error(error.message); return; }
+    } else {
+      const { error } = await supabase.from("categories").insert({ label: l, emoji });
+      if (error) { toast.error(error.message); return; }
+    }
+    toast.success(edit ? "Category updated" : "Category added");
+    onOpenChange(false); onSaved();
+  };
+  const remove = async () => {
+    if (!edit) return;
+    const { error } = await supabase.from("categories").delete().eq("id", edit.key);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Category deleted"); onOpenChange(false); onSaved();
+  };
+  return (
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="mx-auto max-w-md">
+        <DrawerHeader><DrawerTitle>{edit ? "Edit category" : "New category"}</DrawerTitle></DrawerHeader>
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 pb-8">
+          <Input placeholder="Category name" value={label} onChange={(e) => setLabel(e.target.value)} className="h-12 rounded-xl" />
+          <div className="grid grid-cols-6 gap-2">
+            {EMOJI_CHOICES.map((e) => (
+              <button key={e} onClick={() => setEmoji(e)} className={`rounded-xl border p-2 text-2xl ${emoji === e ? "border-primary bg-secondary" : "border-border"}`}>{e}</button>
+            ))}
+          </div>
+          <Button onClick={save} className="h-12 w-full rounded-xl text-base font-bold">{edit ? "Save changes" : "Add category"}</Button>
+          {edit && <Button variant="outline" onClick={remove} className="h-12 w-full rounded-xl text-base font-bold text-destructive">Delete category</Button>}
         </div>
       </DrawerContent>
     </Drawer>

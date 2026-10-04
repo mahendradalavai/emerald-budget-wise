@@ -229,7 +229,7 @@ function Tracker({ email }: { email: string }) {
         )}
       </main>
 
-      <button aria-label="Add expense" onClick={() => setAddOpen(true)} className="fixed bottom-20 left-1/2 z-20 flex h-14 w-14 translate-x-[calc(min(50vw,14rem)-5rem)] items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg">
+      <button aria-label="Add expense" onClick={() => setAddOpen(true)} className="fixed bottom-20 right-[max(1.25rem,calc(50vw-12.75rem))] z-20 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg">
         <Plus className="h-7 w-7" />
       </button>
       <nav className="fixed bottom-0 left-1/2 z-10 flex w-full max-w-md -translate-x-1/2 border-t border-border bg-card">

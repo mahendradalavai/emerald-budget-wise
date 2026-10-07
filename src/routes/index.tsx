@@ -71,7 +71,7 @@ const authSchema = z.object({
 
 const phoneSchema = z.string().regex(/^\+[1-9]\d{7,14}$/, "Enter a valid mobile number");
 
-function PhoneAuth() {
+function PhoneAuth({ signup }: { signup: boolean }) {
   const [cc, setCc] = useState("+91");
   const [num, setNum] = useState("");
   const [code, setCode] = useState("");
@@ -119,8 +119,8 @@ function PhoneAuth() {
   );
   return (
     <form onSubmit={(e) => { e.preventDefault(); send(); }} className="space-y-4">
-      <h2 className="text-xl font-bold">Sign in with mobile</h2>
-      <p className="text-sm text-muted-foreground">New or returning — we'll text you a code.</p>
+      <h2 className="text-xl font-bold">{signup ? "Sign up with mobile" : "Sign in with mobile"}</h2>
+      <p className="text-sm text-muted-foreground">{signup ? "Enter your number — we'll text you a code to create your account." : "We'll text you a code. New here? This creates your account too."}</p>
       <div className="flex gap-2">
         <Input value={cc} maxLength={4} onChange={(e) => setCc(e.target.value.replace(/[^\d+]/g, ""))} className="h-12 w-20 rounded-xl text-center" aria-label="Country code" />
         <Input type="tel" inputMode="numeric" maxLength={15} value={num} onChange={(e) => setNum(e.target.value.replace(/\D/g, ""))} className="h-12 flex-1 rounded-xl" placeholder="98765 43210" aria-label="Mobile number" />
@@ -173,11 +173,19 @@ function Auth() {
             <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-12 rounded-xl" placeholder="you@email.com" /></div>
             <div className="space-y-1.5"><Label>Password</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="h-12 rounded-xl" placeholder="••••••" /></div>
             <Button disabled={busy} className="h-12 w-full rounded-xl text-base font-bold">{mode === "in" ? "Sign in" : "Sign up"}</Button>
+            {mode === "up" && <button type="button" onClick={() => setMethod("phone")} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border py-3 text-sm font-bold"><Phone className="h-4 w-4" /> Sign up with mobile number instead</button>}
             <button type="button" onClick={() => setMode(mode === "in" ? "up" : "in")} className="w-full text-sm font-semibold text-primary">
               {mode === "in" ? "New here? Create an account" : "Already have an account? Sign in"}
             </button>
           </form>
-        ) : <PhoneAuth />}
+        ) : (
+          <div className="space-y-4">
+            <PhoneAuth signup={mode === "up"} />
+            <button type="button" onClick={() => setMode(mode === "in" ? "up" : "in")} className="w-full text-sm font-semibold text-primary">
+              {mode === "in" ? "New here? Create an account" : "Already have an account? Sign in"}
+            </button>
+          </div>
+        )}
       </div>
       <p className="mt-4 px-8 text-center text-xs text-muted-foreground">You'll stay signed in on this device until you log out.</p>
     </div>

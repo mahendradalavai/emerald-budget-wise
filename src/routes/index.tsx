@@ -4,13 +4,14 @@ import type { Session } from "@supabase/supabase-js";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
-  Plus, LogOut, Wallet, ChevronLeft, ChevronRight, Trash2, CalendarDays, BarChart3, List, Pencil, Search, X, RefreshCw,
+  Plus, LogOut, Wallet, ChevronLeft, ChevronRight, Trash2, CalendarDays, BarChart3, List, Pencil, Search, X, RefreshCw, UserRound, Phone, Mail,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { ProfileTab } from "@/components/ProfileTab";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 
 export const Route = createFileRoute("/")({
@@ -57,7 +58,7 @@ function Index() {
     <div className="min-h-screen bg-secondary/60">
       <div className="mx-auto min-h-screen max-w-md bg-background shadow-xl">
         {!ready ? <div className="p-10 text-center text-muted-foreground">Loading…</div>
-          : session ? <Tracker email={session.user.email ?? ""} /> : <Auth />}
+          : session ? <Tracker userId={session.user.id} email={session.user.email || session.user.phone && "+" + session.user.phone || ""} /> : <Auth />}
       </div>
     </div>
   );
@@ -108,9 +109,9 @@ function Auth() {
   );
 }
 
-function Tracker({ email }: { email: string }) {
+function Tracker({ userId, email }: { userId: string; email: string }) {
   const [month, setMonth] = useState(() => new Date());
-  const [tab, setTab] = useState<"month" | "daily" | "year">("month");
+  const [tab, setTab] = useState<"month" | "daily" | "year" | "profile">("month");
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [yearExp, setYearExp] = useState<Expense[]>([]);
   const [customCats, setCustomCats] = useState<Cat[]>([]);
@@ -233,6 +234,7 @@ function Tracker({ email }: { email: string }) {
       </header>
 
       <main className="px-5 pt-5">
+        {tab === "profile" && <ProfileTab userId={userId} contact={email} onSignOut={() => supabase.auth.signOut()} />}
         {tab === "month" && (
           <section className="space-y-3">
             <div className="flex items-center justify-between">
@@ -351,9 +353,9 @@ function Tracker({ email }: { email: string }) {
         <Plus className="h-7 w-7" />
       </button>
       <nav className="fixed bottom-0 left-1/2 z-10 flex w-full max-w-md -translate-x-1/2 border-t border-border bg-card">
-        {([["month", "Monthly", BarChart3], ["daily", "Daily", List], ["year", "Yearly", CalendarDays]] as const).map(([k, l, I]) => (
+        {([["month", "Monthly", BarChart3], ["daily", "Daily", List], ["year", "Yearly", CalendarDays], ["profile", "Profile", UserRound]] as const).map(([k, l, I]) => (
           <button key={k} onClick={() => setTab(k)} className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-semibold ${tab === k ? "text-primary" : "text-muted-foreground"}`}>
-            <span className={`rounded-full px-5 py-1 ${tab === k ? "bg-secondary" : ""}`}><I className="h-5 w-5" /></span>{l}
+            <span className={`rounded-full px-4 py-1 ${tab === k ? "bg-secondary" : ""}`}><I className="h-5 w-5" /></span>{l}
           </button>
         ))}
       </nav>

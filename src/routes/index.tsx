@@ -46,9 +46,29 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 type Expense = { id: string; amount: number; category: string; note: string | null; spent_on: string };
 
+function Splash() {
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-b from-background to-secondary/70">
+      <div className="clay-pop clay-btn flex h-24 w-24 items-center justify-center rounded-[2rem] bg-primary text-primary-foreground">
+        <Wallet className="h-11 w-11" />
+      </div>
+      <h1 className="clay-rise mt-7 text-4xl font-extrabold tracking-tight text-primary" style={{ animationDelay: "250ms" }}>Kharcha</h1>
+      <p className="clay-rise mt-1 text-sm font-semibold text-muted-foreground" style={{ animationDelay: "450ms" }}>Know where every rupee goes.</p>
+      <div className="clay-float mt-8 flex gap-2 text-2xl" style={{ animationDelay: "800ms" }}>
+        <span>🛒</span><span>🚌</span><span>🍛</span><span>🏠</span>
+      </div>
+    </div>
+  );
+}
+
 function Index() {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
+  const [intro, setIntro] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setIntro(false), 2400);
+    return () => clearTimeout(t);
+  }, []);
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
@@ -56,6 +76,7 @@ function Index() {
   }, []);
   return (
     <div className="min-h-screen bg-secondary/60">
+      {intro && <Splash />}
       <div className="mx-auto min-h-screen max-w-md bg-background shadow-xl">
         {!ready ? <div className="p-10 text-center text-muted-foreground">Loading…</div>
           : session ? <Tracker userId={session.user.id} email={session.user.email || session.user.phone && "+" + session.user.phone || ""} /> : <Auth />}
@@ -154,11 +175,11 @@ function Auth() {
   return (
     <div className="flex min-h-screen flex-col">
       <div className="rounded-b-[2.5rem] bg-primary px-6 pb-14 pt-16 text-primary-foreground">
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-foreground/20"><Wallet className="h-7 w-7" /></div>
+        <div className="clay-pop clay-btn mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-foreground/20"><Wallet className="h-7 w-7" /></div>
         <h1 className="text-3xl font-extrabold">Kharcha</h1>
         <p className="mt-1 opacity-90">Know where every rupee goes.</p>
       </div>
-      <div className="-mt-8 mx-5 rounded-3xl bg-card p-6 shadow-lg">
+      <div className="clay-card -mt-8 mx-5 rounded-3xl bg-card p-6 shadow-lg">
         <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-secondary p-1">
           {([["email", "Email", Mail], ["phone", "Mobile OTP", Phone]] as const).map(([k, l, I]) => (
             <button key={k} type="button" onClick={() => setMethod(k)}
@@ -328,7 +349,7 @@ function Tracker({ userId, email }: { userId: string; email: string }) {
             </div>
             {byCat.map((c) => (
               <div key={c.key} className="flex items-center gap-3 rounded-2xl bg-card p-3 shadow-sm ring-1 ring-border">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-2xl">{c.emoji}</div>
+                <div className="clay-inset flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary text-2xl">{c.emoji}</div>
                 <div className="flex-1">
                   <div className="flex justify-between text-sm font-semibold"><span>{c.label}</span><span>{money(c.total)}</span></div>
                   <Progress value={spent ? (c.total / spent) * 100 : 0} className="mt-2 h-1.5 bg-secondary" />
@@ -402,7 +423,7 @@ function Tracker({ userId, email }: { userId: string; email: string }) {
                   {items.map((x) => { const c = catOf(x.category); return (
                     <div key={x.id} className="flex items-center gap-3 p-3">
                       <button onClick={() => { setEditExp(x); setAddOpen(true); }} className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-label={`Edit ${c.label} expense`}>
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-xl">{c.emoji}</div>
+                        <div className="clay-inset flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-secondary text-xl">{c.emoji}</div>
                         <div className="flex-1 min-w-0"><p className="font-semibold">{c.label}</p>{x.note && <p className="truncate text-xs text-muted-foreground">{x.note}</p>}</div>
                         <p className="font-bold">{money(x.amount)}</p>
                       </button>
@@ -432,10 +453,10 @@ function Tracker({ userId, email }: { userId: string; email: string }) {
         )}
       </main>
 
-      <button aria-label="Add expense" onClick={openAdd} className="fixed bottom-20 right-[max(1.25rem,calc(50vw-12.75rem))] z-20 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg">
+      <button aria-label="Add expense" onClick={openAdd} className="clay-btn fixed bottom-20 right-[max(1.25rem,calc(50vw-12.75rem))] z-20 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
         <Plus className="h-7 w-7" />
       </button>
-      <nav className="fixed bottom-0 left-1/2 z-10 flex w-full max-w-md -translate-x-1/2 border-t border-border bg-card">
+      <nav className="clay-nav fixed bottom-0 left-1/2 z-10 flex w-full max-w-md -translate-x-1/2 rounded-t-[1.5rem] border-t-0 bg-card">
         {([["month", "Monthly", BarChart3], ["daily", "Daily", List], ["year", "Yearly", CalendarDays], ["profile", "Profile", UserRound]] as const).map(([k, l, I]) => (
           <button key={k} onClick={() => setTab(k)} className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-semibold ${tab === k ? "text-primary" : "text-muted-foreground"}`}>
             <span className={`rounded-full px-4 py-1 ${tab === k ? "bg-secondary" : ""}`}><I className="h-5 w-5" /></span>{l}

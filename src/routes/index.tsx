@@ -4,14 +4,13 @@ import type { Session } from "@supabase/supabase-js";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
-  Plus, LogOut, Wallet, ChevronLeft, ChevronRight, Trash2, CalendarDays, BarChart3, List, Pencil, Search, X, RefreshCw, UserRound, Phone, Mail,
+  Plus, LogOut, Wallet, ChevronLeft, ChevronRight, Trash2, CalendarDays, BarChart3, List, Pencil, Search, X, RefreshCw,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { ProfileTab } from "@/components/ProfileTab";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 
 export const Route = createFileRoute("/")({
@@ -58,7 +57,7 @@ function Index() {
     <div className="min-h-screen bg-secondary/60">
       <div className="mx-auto min-h-screen max-w-md bg-background shadow-xl">
         {!ready ? <div className="p-10 text-center text-muted-foreground">Loading…</div>
-          : session ? <Tracker userId={session.user.id} email={session.user.email || session.user.phone && "+" + session.user.phone || ""} /> : <Auth />}
+          : session ? <Tracker email={session.user.email ?? ""} /> : <Auth />}
       </div>
     </div>
   );
@@ -69,69 +68,7 @@ const authSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters").max(72),
 });
 
-const phoneSchema = z.string().regex(/^\+[1-9]\d{7,14}$/, "Enter a valid mobile number");
-
-function PhoneAuth() {
-  const [cc, setCc] = useState("+91");
-  const [num, setNum] = useState("");
-  const [code, setCode] = useState("");
-  const [sentTo, setSentTo] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
-  useEffect(() => {
-    if (!cooldown) return;
-    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [cooldown]);
-
-  const send = async () => {
-    const phone = (cc.trim() + num.replace(/\D/g, "")).replace(/^\+?/, "+");
-    const p = phoneSchema.safeParse(phone);
-    if (!p.success) { toast.error(p.error.issues[0]?.message); return; }
-    setBusy(true);
-    const { error } = await supabase.auth.signInWithOtp({ phone: p.data });
-    setBusy(false);
-    if (error) { toast.error(error.message.includes("provider") || error.message.includes("Unsupported") ? "Mobile sign-in isn't switched on yet." : "Couldn't send code. Try again."); return; }
-    setSentTo(p.data); setCode(""); setCooldown(30);
-    toast.success("Code sent by SMS");
-  };
-  const verify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!sentTo) return;
-    if (!/^\d{6}$/.test(code)) { toast.error("Enter the 6-digit code"); return; }
-    setBusy(true);
-    const { error } = await supabase.auth.verifyOtp({ phone: sentTo, token: code, type: "sms" });
-    setBusy(false);
-    if (error) toast.error("Wrong or expired code");
-  };
-
-  if (sentTo) return (
-    <form onSubmit={verify} className="space-y-4">
-      <h2 className="text-xl font-bold">Enter code</h2>
-      <p className="text-sm text-muted-foreground">We sent a 6-digit code to {sentTo}</p>
-      <Input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} className="h-14 rounded-xl text-center text-2xl font-bold tracking-[0.5em]" placeholder="------" />
-      <Button disabled={busy} className="h-12 w-full rounded-xl text-base font-bold">{busy ? "Checking…" : "Verify & continue"}</Button>
-      <div className="flex justify-between text-sm font-semibold">
-        <button type="button" onClick={() => setSentTo(null)} className="text-muted-foreground">Change number</button>
-        <button type="button" disabled={cooldown > 0 || busy} onClick={send} className="text-primary disabled:text-muted-foreground">{cooldown ? `Resend in ${cooldown}s` : "Resend code"}</button>
-      </div>
-    </form>
-  );
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); send(); }} className="space-y-4">
-      <h2 className="text-xl font-bold">Sign in with mobile</h2>
-      <p className="text-sm text-muted-foreground">New or returning — we'll text you a code.</p>
-      <div className="flex gap-2">
-        <Input value={cc} maxLength={4} onChange={(e) => setCc(e.target.value.replace(/[^\d+]/g, ""))} className="h-12 w-20 rounded-xl text-center" aria-label="Country code" />
-        <Input type="tel" inputMode="numeric" maxLength={15} value={num} onChange={(e) => setNum(e.target.value.replace(/\D/g, ""))} className="h-12 flex-1 rounded-xl" placeholder="98765 43210" aria-label="Mobile number" />
-      </div>
-      <Button disabled={busy} className="h-12 w-full rounded-xl text-base font-bold">{busy ? "Sending…" : "Send OTP"}</Button>
-    </form>
-  );
-}
-
 function Auth() {
-  const [method, setMethod] = useState<"email" | "phone">("email");
   const [mode, setMode] = useState<"in" | "up">("in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -158,35 +95,22 @@ function Auth() {
         <h1 className="text-3xl font-extrabold">Kharcha</h1>
         <p className="mt-1 opacity-90">Know where every rupee goes.</p>
       </div>
-      <div className="-mt-8 mx-5 rounded-3xl bg-card p-6 shadow-lg">
-        <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-secondary p-1">
-          {([["email", "Email", Mail], ["phone", "Mobile OTP", Phone]] as const).map(([k, l, I]) => (
-            <button key={k} type="button" onClick={() => setMethod(k)}
-              className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-bold ${method === k ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>
-              <I className="h-4 w-4" />{l}
-            </button>
-          ))}
-        </div>
-        {method === "email" ? (
-          <form onSubmit={submit} className="space-y-4">
-            <h2 className="text-xl font-bold">{mode === "in" ? "Welcome back" : "Create account"}</h2>
-            <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-12 rounded-xl" placeholder="you@email.com" /></div>
-            <div className="space-y-1.5"><Label>Password</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="h-12 rounded-xl" placeholder="••••••" /></div>
-            <Button disabled={busy} className="h-12 w-full rounded-xl text-base font-bold">{mode === "in" ? "Sign in" : "Sign up"}</Button>
-            <button type="button" onClick={() => setMode(mode === "in" ? "up" : "in")} className="w-full text-sm font-semibold text-primary">
-              {mode === "in" ? "New here? Create an account" : "Already have an account? Sign in"}
-            </button>
-          </form>
-        ) : <PhoneAuth />}
-      </div>
-      <p className="mt-4 px-8 text-center text-xs text-muted-foreground">You'll stay signed in on this device until you log out.</p>
+      <form onSubmit={submit} className="-mt-8 mx-5 space-y-4 rounded-3xl bg-card p-6 shadow-lg">
+        <h2 className="text-xl font-bold">{mode === "in" ? "Welcome back" : "Create account"}</h2>
+        <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-12 rounded-xl" placeholder="you@email.com" /></div>
+        <div className="space-y-1.5"><Label>Password</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="h-12 rounded-xl" placeholder="••••••" /></div>
+        <Button disabled={busy} className="h-12 w-full rounded-xl text-base font-bold">{mode === "in" ? "Sign in" : "Sign up"}</Button>
+        <button type="button" onClick={() => setMode(mode === "in" ? "up" : "in")} className="w-full text-sm font-semibold text-primary">
+          {mode === "in" ? "New here? Create an account" : "Already have an account? Sign in"}
+        </button>
+      </form>
     </div>
   );
 }
 
-function Tracker({ userId, email }: { userId: string; email: string }) {
+function Tracker({ email }: { email: string }) {
   const [month, setMonth] = useState(() => new Date());
-  const [tab, setTab] = useState<"month" | "daily" | "year" | "profile">("month");
+  const [tab, setTab] = useState<"month" | "daily" | "year">("month");
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [yearExp, setYearExp] = useState<Expense[]>([]);
   const [customCats, setCustomCats] = useState<Cat[]>([]);
@@ -309,7 +233,6 @@ function Tracker({ userId, email }: { userId: string; email: string }) {
       </header>
 
       <main className="px-5 pt-5">
-        {tab === "profile" && <ProfileTab userId={userId} contact={email} onSignOut={() => supabase.auth.signOut()} />}
         {tab === "month" && (
           <section className="space-y-3">
             <div className="flex items-center justify-between">
@@ -428,9 +351,9 @@ function Tracker({ userId, email }: { userId: string; email: string }) {
         <Plus className="h-7 w-7" />
       </button>
       <nav className="fixed bottom-0 left-1/2 z-10 flex w-full max-w-md -translate-x-1/2 border-t border-border bg-card">
-        {([["month", "Monthly", BarChart3], ["daily", "Daily", List], ["year", "Yearly", CalendarDays], ["profile", "Profile", UserRound]] as const).map(([k, l, I]) => (
+        {([["month", "Monthly", BarChart3], ["daily", "Daily", List], ["year", "Yearly", CalendarDays]] as const).map(([k, l, I]) => (
           <button key={k} onClick={() => setTab(k)} className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-semibold ${tab === k ? "text-primary" : "text-muted-foreground"}`}>
-            <span className={`rounded-full px-4 py-1 ${tab === k ? "bg-secondary" : ""}`}><I className="h-5 w-5" /></span>{l}
+            <span className={`rounded-full px-5 py-1 ${tab === k ? "bg-secondary" : ""}`}><I className="h-5 w-5" /></span>{l}
           </button>
         ))}
       </nav>

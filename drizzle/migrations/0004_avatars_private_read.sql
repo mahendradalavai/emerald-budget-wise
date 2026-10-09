@@ -1,2 +1,0 @@
-DROP POLICY IF EXISTS "avatar public read" ON storage.objects;
-CREATE POLICY "avatar own read" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);

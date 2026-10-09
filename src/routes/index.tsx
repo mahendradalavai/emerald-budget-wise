@@ -4,7 +4,7 @@ import type { Session } from "@supabase/supabase-js";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
-  Plus, LogOut, Wallet, ChevronLeft, ChevronRight, Trash2, CalendarDays, BarChart3, List, Pencil, Search, X, RefreshCw,
+  Plus, LogOut, Wallet, ChevronLeft, ChevronRight, Trash2, CalendarDays, BarChart3, List, Pencil,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -120,40 +120,27 @@ function Tracker({ email }: { email: string }) {
   const [catOpen, setCatOpen] = useState(false);
   const [editCat, setEditCat] = useState<Cat | null>(null);
   const [calDay, setCalDay] = useState<string | null>(null);
-  const [editExp, setEditExp] = useState<Expense | null>(null);
-  const [query, setQuery] = useState("");
-  const [catFilter, setCatFilter] = useState("all");
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
   const key = ym(month);
   const year = month.getFullYear();
 
   const cats = useMemo(() => [...DEFAULT_CATEGORIES, ...customCats], [customCats]);
-  const catOf = (k: string) => cats.find((c) => c.key === k) ?? { key: k, label: "Deleted category", emoji: "💸" };
+  const catOf = (k: string) => cats.find((c) => c.key === k) ?? { key: k, label: k, emoji: "💸" };
 
   const load = async () => {
-    setLoading(true); setLoadError(false);
     const start = `${key}-01`;
     const end = ym(new Date(month.getFullYear(), month.getMonth() + 1, 1)) + "-01";
-    try {
-      const [e, b, y, c] = await Promise.all([
-        supabase.from("expenses").select("*").gte("spent_on", start).lt("spent_on", end).order("spent_on", { ascending: false }).order("created_at", { ascending: false }),
-        supabase.from("budgets").select("amount").eq("month", key).maybeSingle(),
-        supabase.from("expenses").select("amount,spent_on").gte("spent_on", `${year}-01-01`).lt("spent_on", `${year + 1}-01-01`),
-        supabase.from("categories").select("*").order("created_at"),
-      ]);
-      if (e.error || b.error || y.error || c.error) throw new Error("load failed");
-      setExpenses((e.data ?? []).map((x) => ({ ...x, amount: Number(x.amount) })));
-      setBudget(Number(b.data?.amount ?? 0));
-      setYearExp((y.data ?? []).map((x) => ({ id: "", category: "", note: null, spent_on: x.spent_on, amount: Number(x.amount) })));
-      setCustomCats((c.data ?? []).map((x) => ({ key: x.id, label: x.label, emoji: x.emoji, custom: true })));
-    } catch {
-      setLoadError(true);
-    } finally {
-      setLoading(false);
-    }
+    const [e, b, y, c] = await Promise.all([
+      supabase.from("expenses").select("*").gte("spent_on", start).lt("spent_on", end).order("spent_on", { ascending: false }),
+      supabase.from("budgets").select("amount").eq("month", key).maybeSingle(),
+      supabase.from("expenses").select("*").gte("spent_on", `${year}-01-01`).lt("spent_on", `${year + 1}-01-01`),
+      supabase.from("categories").select("*").order("created_at"),
+    ]);
+    setExpenses((e.data ?? []).map((x) => ({ ...x, amount: Number(x.amount) })));
+    setBudget(Number(b.data?.amount ?? 0));
+    setYearExp((y.data ?? []).map((x) => ({ ...x, amount: Number(x.amount) })));
+    setCustomCats((c.data ?? []).map((x) => ({ key: x.id, label: x.label, emoji: x.emoji, custom: true })));
   };
-  useEffect(() => { load(); setCalDay(null); }, [key]);
+  useEffect(() => { load(); }, [key]);
 
   const spent = expenses.reduce((s, x) => s + x.amount, 0);
   const left = budget - spent;
@@ -181,33 +168,9 @@ function Tracker({ email }: { email: string }) {
   ];
 
   const del = async (id: string) => {
-    if (!window.confirm("Delete this expense?")) return;
     const { error } = await supabase.from("expenses").delete().eq("id", id);
-    if (error) toast.error("Couldn't delete. Try again."); else { toast.success("Deleted"); load(); }
+    if (error) toast.error(error.message); else load();
   };
-  const openAdd = () => { setEditExp(null); setAddOpen(true); };
-
-  const q = query.trim().toLowerCase();
-  const isFiltering = q !== "" || catFilter !== "all";
-  const visibleDays = useMemo(() => byDay
-    .filter(([d]) => !calDay || d === calDay)
-    .map(([d, items]) => [d, items.filter((x) => {
-      if (catFilter !== "all" && x.category !== catFilter) return false;
-      if (!q) return true;
-      return (x.note ?? "").toLowerCase().includes(q) || catOf(x.category).label.toLowerCase().includes(q);
-    })] as [string, Expense[]])
-    .filter(([, items]) => items.length > 0), [byDay, calDay, catFilter, q, cats]);
-  const filteredCount = visibleDays.reduce((s, [, i]) => s + i.length, 0);
-  const filteredTotal = visibleDays.reduce((s, [, i]) => s + i.reduce((a, x) => a + x.amount, 0), 0);
-
-  if (loadError) return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-8 text-center">
-      <span className="text-5xl">📡</span>
-      <p className="mt-4 text-lg font-bold">Couldn't load your expenses</p>
-      <p className="mt-1 text-sm text-muted-foreground">Check your internet connection and try again.</p>
-      <Button onClick={load} className="mt-5 rounded-xl"><RefreshCw className="h-4 w-4" /> Try again</Button>
-    </div>
-  );
 
   return (
     <div className="pb-28">
@@ -281,33 +244,10 @@ function Tracker({ email }: { email: string }) {
               </div>
             </div>
 
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Search notes or categories" value={query} maxLength={50} onChange={(e) => setQuery(e.target.value)} className="h-11 rounded-xl pl-9 pr-9" />
-              {query && <button aria-label="Clear search" onClick={() => setQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"><X className="h-4 w-4" /></button>}
-            </div>
-            <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1">
-              {[{ key: "all", label: "All", emoji: "✨" }, ...cats].map((c) => (
-                <button key={c.key} onClick={() => setCatFilter(c.key)}
-                  className={`flex shrink-0 items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold ${catFilter === c.key ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card"}`}>
-                  <span>{c.emoji}</span>{c.label}
-                </button>
-              ))}
-            </div>
-            {isFiltering && <p className="text-xs text-muted-foreground">{filteredCount} result{filteredCount === 1 ? "" : "s"} · {money(filteredTotal)}</p>}
-
-            {loading ? (
-              <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-16 animate-pulse rounded-2xl bg-secondary" />)}</div>
-            ) : visibleDays.length === 0 ? (
-              <div className="flex flex-col items-center rounded-2xl border border-dashed border-border px-6 py-10 text-center">
-                <span className="text-4xl">{isFiltering ? "🔍" : "🌱"}</span>
-                <p className="mt-3 font-bold">{isFiltering ? "Nothing matches" : calDay ? "No spending this day" : "No expenses yet"}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{isFiltering ? "Try a different word or category." : "Tap the green + button to add your first one."}</p>
-                {isFiltering
-                  ? <Button variant="outline" onClick={() => { setQuery(""); setCatFilter("all"); setCalDay(null); }} className="mt-4 rounded-xl">Clear filters</Button>
-                  : <Button onClick={openAdd} className="mt-4 rounded-xl"><Plus className="h-4 w-4" /> Add expense</Button>}
-              </div>
-            ) : visibleDays.map(([day, items]) => (
+            {(calDay ? byDay.filter(([d]) => d === calDay) : byDay).length === 0 && (
+              <p className="py-6 text-center text-muted-foreground">{calDay ? "No expenses on this day." : "No expenses this month yet. Tap + to add one."}</p>
+            )}
+            {(calDay ? byDay.filter(([d]) => d === calDay) : byDay).map(([day, items]) => (
               <div key={day}>
                 <div className="mb-2 flex justify-between text-sm font-bold">
                   <span>{new Date(day + "T00:00").toLocaleDateString("en", { weekday: "short", day: "numeric", month: "short" })}</span>
@@ -316,11 +256,9 @@ function Tracker({ email }: { email: string }) {
                 <div className="divide-y divide-border rounded-2xl bg-card shadow-sm ring-1 ring-border">
                   {items.map((x) => { const c = catOf(x.category); return (
                     <div key={x.id} className="flex items-center gap-3 p-3">
-                      <button onClick={() => { setEditExp(x); setAddOpen(true); }} className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-label={`Edit ${c.label} expense`}>
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-xl">{c.emoji}</div>
-                        <div className="flex-1 min-w-0"><p className="font-semibold">{c.label}</p>{x.note && <p className="truncate text-xs text-muted-foreground">{x.note}</p>}</div>
-                        <p className="font-bold">{money(x.amount)}</p>
-                      </button>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary text-xl">{c.emoji}</div>
+                      <div className="flex-1 min-w-0"><p className="font-semibold">{c.label}</p>{x.note && <p className="truncate text-xs text-muted-foreground">{x.note}</p>}</div>
+                      <p className="font-bold">{money(x.amount)}</p>
                       <button aria-label="Delete" onClick={() => del(x.id)} className="p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
                     </div>); })}
                 </div>
@@ -347,7 +285,7 @@ function Tracker({ email }: { email: string }) {
         )}
       </main>
 
-      <button aria-label="Add expense" onClick={openAdd} className="fixed bottom-20 right-[max(1.25rem,calc(50vw-12.75rem))] z-20 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg">
+      <button aria-label="Add expense" onClick={() => setAddOpen(true)} className="fixed bottom-20 right-[max(1.25rem,calc(50vw-12.75rem))] z-20 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg">
         <Plus className="h-7 w-7" />
       </button>
       <nav className="fixed bottom-0 left-1/2 z-10 flex w-full max-w-md -translate-x-1/2 border-t border-border bg-card">
@@ -358,7 +296,7 @@ function Tracker({ email }: { email: string }) {
         ))}
       </nav>
 
-      <AddExpense open={addOpen} onOpenChange={setAddOpen} onSaved={load} cats={cats} edit={editExp} />
+      <AddExpense open={addOpen} onOpenChange={setAddOpen} onSaved={load} cats={cats} />
       <BudgetDrawer open={budgetOpen} onOpenChange={setBudgetOpen} month={key} current={budget} onSaved={load} />
       <CategoryDrawer open={catOpen} onOpenChange={setCatOpen} edit={editCat} onSaved={load} />
     </div>
@@ -366,44 +304,31 @@ function Tracker({ email }: { email: string }) {
 }
 
 const expenseSchema = z.object({
-  amount: z.number({ message: "Enter an amount" }).finite("Enter a valid amount").positive("Amount must be more than 0").max(100000000, "Amount is too large"),
-  category: z.string().min(1, "Pick a category"),
-  note: z.string().trim().max(200, "Note must be under 200 characters"),
-  spent_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date"),
+  amount: z.number().positive("Enter an amount").max(100000000),
+  category: z.string(),
+  note: z.string().trim().max(200),
+  spent_on: z.string().min(10, "Pick a date"),
 });
 
-function AddExpense({ open, onOpenChange, onSaved, cats, edit }: { open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void; cats: Cat[]; edit: Expense | null }) {
+function AddExpense({ open, onOpenChange, onSaved, cats }: { open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void; cats: Cat[] }) {
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("groceries");
   const [note, setNote] = useState("");
   const [date, setDate] = useState(today());
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (!open) return;
-    setAmount(edit ? String(edit.amount) : "");
-    setCategory(edit?.category ?? "groceries");
-    setNote(edit?.note ?? "");
-    setDate(edit?.spent_on ?? today());
-  }, [open, edit]);
   const save = async () => {
-    const p = expenseSchema.safeParse({ amount: amount.trim() === "" ? NaN : Number(amount), category, note, spent_on: date });
+    const p = expenseSchema.safeParse({ amount: Number(amount), category, note, spent_on: date });
     if (!p.success) { toast.error(p.error.issues[0]?.message); return; }
-    setBusy(true);
-    const row = { ...p.data, note: p.data.note || null };
-    const { error } = edit
-      ? await supabase.from("expenses").update(row).eq("id", edit.id)
-      : await supabase.from("expenses").insert(row);
-    setBusy(false);
-    if (error) { toast.error("Couldn't save. Check your internet and try again."); return; }
-    toast.success(edit ? "Expense updated" : "Expense added");
-    onOpenChange(false); onSaved();
+    const { error } = await supabase.from("expenses").insert({ ...p.data, note: p.data.note || null });
+    if (error) { toast.error(error.message); return; }
+    toast.success("Expense added");
+    setAmount(""); setNote(""); onOpenChange(false); onSaved();
   };
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="mx-auto max-w-md">
-        <DrawerHeader><DrawerTitle>{edit ? "Edit expense" : "Add expense"}</DrawerTitle></DrawerHeader>
+        <DrawerHeader><DrawerTitle>Add expense</DrawerTitle></DrawerHeader>
         <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 pb-8">
-          <Input inputMode="decimal" placeholder="₹ 0" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} className="h-14 rounded-xl text-2xl font-bold" />
+          <Input inputMode="decimal" placeholder="₹ 0" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-14 rounded-xl text-2xl font-bold" />
           <div className="grid grid-cols-3 gap-2">
             {cats.map((c) => (
               <button key={c.key} onClick={() => setCategory(c.key)} className={`flex flex-col items-center gap-1 rounded-xl border p-3 text-xs font-semibold ${category === c.key ? "border-primary bg-secondary text-primary" : "border-border"}`}>
@@ -411,9 +336,9 @@ function AddExpense({ open, onOpenChange, onSaved, cats, edit }: { open: boolean
               </button>
             ))}
           </div>
-          <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} className="h-12 rounded-xl" />
-          <Input placeholder="Note (optional)" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} className="h-12 rounded-xl" />
-          <Button disabled={busy} onClick={save} className="h-12 w-full rounded-xl text-base font-bold">{busy ? "Saving…" : edit ? "Save changes" : "Save"}</Button>
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-12 rounded-xl" />
+          <Input placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} className="h-12 rounded-xl" />
+          <Button onClick={save} className="h-12 w-full rounded-xl text-base font-bold">Save</Button>
         </div>
       </DrawerContent>
     </Drawer>

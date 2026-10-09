@@ -46,40 +46,51 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 type Expense = { id: string; amount: number; category: string; note: string | null; spent_on: string };
 
-function Splash() {
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-b from-background to-secondary/70">
-      <div className="clay-pop clay-btn flex h-24 w-24 items-center justify-center rounded-[2rem] bg-primary text-primary-foreground">
-        <Wallet className="h-11 w-11" />
-      </div>
-      <h1 className="clay-rise mt-7 text-4xl font-extrabold tracking-tight text-primary" style={{ animationDelay: "250ms" }}>Kharcha</h1>
-      <p className="clay-rise mt-1 text-sm font-semibold text-muted-foreground" style={{ animationDelay: "450ms" }}>Know where every rupee goes.</p>
-      <div className="clay-float mt-8 flex gap-2 text-2xl" style={{ animationDelay: "800ms" }}>
-        <span>🛒</span><span>🚌</span><span>🍛</span><span>🏠</span>
-      </div>
-    </div>
-  );
-}
-
 function Index() {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
-  const [intro, setIntro] = useState(true);
+  const [recovering, setRecovering] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setIntro(false), 2400);
-    return () => clearTimeout(t);
-  }, []);
-  useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data } = supabase.auth.onAuthStateChange((e, s) => {
+      if (e === "PASSWORD_RECOVERY") setRecovering(true);
+      setSession(s);
+    });
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
     return () => data.subscription.unsubscribe();
   }, []);
   return (
     <div className="min-h-screen bg-secondary/60">
-      {intro && <Splash />}
       <div className="mx-auto min-h-screen max-w-md bg-background shadow-xl">
         {!ready ? <div className="p-10 text-center text-muted-foreground">Loading…</div>
+          : recovering ? <ResetPassword onDone={() => setRecovering(false)} />
           : session ? <Tracker userId={session.user.id} email={session.user.email || session.user.phone && "+" + session.user.phone || ""} /> : <Auth />}
+      </div>
+    </div>
+  );
+}
+
+function ResetPassword({ onDone }: { onDone: () => void }) {
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password });
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Password updated! You're signed in.");
+    onDone();
+  };
+  return (
+    <div className="flex min-h-screen flex-col justify-center px-6">
+      <div className="clay-card rounded-3xl bg-card p-6 shadow-lg">
+        <form onSubmit={submit} className="space-y-4">
+          <h2 className="text-xl font-bold">Set a new password</h2>
+          <p className="text-sm text-muted-foreground">Enter a new password for your account.</p>
+          <div className="space-y-1.5"><Label>New password</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="h-12 rounded-xl" placeholder="••••••" /></div>
+          <Button disabled={busy} className="h-12 w-full rounded-xl text-base font-bold">{busy ? "Saving…" : "Save new password"}</Button>
+        </form>
       </div>
     </div>
   );

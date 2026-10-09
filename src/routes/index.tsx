@@ -46,9 +46,29 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 type Expense = { id: string; amount: number; category: string; note: string | null; spent_on: string };
 
+function Splash() {
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-b from-background to-secondary/70">
+      <div className="clay-pop clay-btn flex h-24 w-24 items-center justify-center rounded-[2rem] bg-primary text-primary-foreground">
+        <Wallet className="h-11 w-11" />
+      </div>
+      <h1 className="clay-rise mt-7 text-4xl font-extrabold tracking-tight text-primary" style={{ animationDelay: "250ms" }}>Kharcha</h1>
+      <p className="clay-rise mt-1 text-sm font-semibold text-muted-foreground" style={{ animationDelay: "450ms" }}>Know where every rupee goes.</p>
+      <div className="clay-float mt-8 flex gap-2 text-2xl" style={{ animationDelay: "800ms" }}>
+        <span>🛒</span><span>🚌</span><span>🍛</span><span>🏠</span>
+      </div>
+    </div>
+  );
+}
+
 function Index() {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
+  const [intro, setIntro] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setIntro(false), 2400);
+    return () => clearTimeout(t);
+  }, []);
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
@@ -56,6 +76,7 @@ function Index() {
   }, []);
   return (
     <div className="min-h-screen bg-secondary/60">
+      {intro && <Splash />}
       <div className="mx-auto min-h-screen max-w-md bg-background shadow-xl">
         {!ready ? <div className="p-10 text-center text-muted-foreground">Loading…</div>
           : session ? <Tracker userId={session.user.id} email={session.user.email || session.user.phone && "+" + session.user.phone || ""} /> : <Auth />}

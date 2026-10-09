@@ -109,7 +109,7 @@ export function ProfileTab({ userId, contact, onSignOut }: { userId: string; con
         <p className="text-sm text-muted-foreground">{contact}</p>
       </div>
 
-      <div className="clay-card space-y-4 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
+      <div className="space-y-4 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
         <div className="space-y-1.5">
           <Label>Name</Label>
           <Input value={fullName} maxLength={50} onChange={(e) => setFullName(e.target.value)} placeholder="Your name" className="h-12 rounded-xl" />
